@@ -42,7 +42,7 @@ GOOGLE_API_KEY=your_google_api_key_here
 
 To find the appi key :-
 
-Go to - makerssuit.google.com/app/apike
+Go to - makerssuit.google.com/app/apikey
 
 On the Web page click - "create API key in niw project "
 
