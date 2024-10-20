@@ -1,48 +1,15 @@
 from dotenv import load_dotenv
 load_dotenv()
 import streamlit as st  
-import pandas as pd
+import pandas as pd 
 import matplotlib.pyplot as plt
 import os
 import sqlite3
 import google.generativeai as genai
 from google.api_core.exceptions import ResourceExhausted
 
-
-## Configure Genai Key 
+# Configure Genai Key
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-
-def get_gemini_response(question, prompt):
-    try:
-        model = genai.GenerativeModel('gemini-pro')
-        response = model.generate_content([prompt[0], question])
-        return response.text
-    except ResourceExhausted:
-        st.error("Quota exceeded. Please try again later.")
-        return None
-    except Exception as e:
-        st.error(f"An error occurred while querying Gemini: {str(e)}")
-        return None
-
-## Function To retrieve query from the database
-def read_sql_query(query, db_path):
-    if query is None:
-        st.error("Failed to generate a valid SQL query. Please try again or rephrase your question.")
-        return None
-
-    try:
-        conn = sqlite3.connect(db_path)
-        cur = conn.cursor()
-        cur.execute(query)
-        results = cur.fetchall()
-        conn.close()
-        return results
-    except sqlite3.Error as e:
-        st.error(f"An error occurred while executing the SQL query: {str(e)}")
-        return None
-    except Exception as e:
-        st.error(f"An unexpected error occurred: {str(e)}")
-        return None
 
 ## Define Your Prompt
 
@@ -62,7 +29,7 @@ prompt = [
     EXTRACURRICULAR_ACTIVITIES, INTERNSHIP_COMPANY, INTERNSHIP_POSITION, INTERNSHIP_START_DATE, INTERNSHIP_END_DATE \n\n For Example,\nfor Example 1 - How many students are in the database?, 
     the SQL command will be something like this SELECT COUNT(*) FROM STUDENT; 
     \nExample 2 - List all students in Computer Science major with a GPA above 3.5.,the SQL command will be something like this
-    SELECT FIRST_NAME, LAST_NAME, GPA FROM STUDENT WHERE  = 'Computer Science' AND GPA > 3.5;
+    SELECT FIRST_NAME, LAST_NAME, GPA FROM STUDENT WHERE MAJOR = 'Computer Science' AND GPA > 3.5;
     \nExample 3 - What is the average scholarship amount for students from California?,the SQL command will be something like this
     SELECT AVG(SCHOLARSHIP_AMOUNT) FROM STUDENT WHERE STATE = 'CA';
     \nExample 4 - Show me the names of students who have interned at Google, along with their internship positions.,
@@ -1128,3 +1095,91 @@ prompt = [
      also the sql code should not have ``` in beginning or end and sql word in output answer, without any additional explanation.
     """
 ]
+
+# Function to get Gemini response
+def get_gemini_response(question, prompt):
+    try:
+        model = genai.GenerativeModel('gemini-pro')
+        response = model.generate_content([prompt[0], question])
+        return response.text
+    except ResourceExhausted:
+        st.error("Quota exceeded. Please try again later.")
+        return None
+    except Exception as e:
+        st.error(f"An error occurred while querying Gemini: {str(e)}")
+        return None
+
+# Function to retrieve query from the database
+def read_sql_query(sql, db):
+    try:
+        conn = sqlite3.connect(db)
+        cur = conn.cursor()
+        cur.execute(sql)
+        rows = cur.fetchall()
+        columns = [description[0] for description in cur.description]
+        return rows, columns
+    except sqlite3.Error as e:
+        st.error(f"An error occurred while executing the SQL query: {str(e)}")
+        return None, None
+    finally:
+        conn.close()
+
+# Function to get table names
+def get_table_names(db):
+    try:
+        conn = sqlite3.connect(db)
+        cursor = conn.cursor()
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = cursor.fetchall()
+        return [table[0] for table in tables]
+    except sqlite3.Error as e:
+        st.error(f"An error occurred while fetching table names: {str(e)}")
+        return []
+    finally:
+        conn.close()
+
+# Streamlit app
+def main():
+    st.title("NL TO DB")
+    st.write("Ask a question about the student database and get an output")
+
+    # Get database path
+    db_path = os.path.abspath("comprehensive_student.db")
+    st.write(f"Database path: {db_path}")  # Display the database path
+
+    # Check if the database file exists
+    if not os.path.exists(db_path):
+        st.error("Database file does not exist.")
+        return
+
+    # Input section
+    question = st.text_input("Enter your question:")
+    if st.button("Generate SQL"):
+        if question:
+            # Call the function to get the Gemini model's response
+            sql_query = get_gemini_response(question, prompt)
+            if sql_query:
+                st.subheader("Generated SQL Query:")
+                st.code(sql_query, language='sql')
+                print(f"Generated SQL Query: {sql_query}")  # Debug print
+
+                # Execute the query
+                result, columns = read_sql_query(sql_query, db_path)
+                print(f"Executing SQL Query: {sql_query}")  # Debug print
+
+                if result is not None and columns is not None:
+                    if len(result) == 0:
+                        st.warning("No results found for the generated SQL query.")
+                    else:
+                        df = pd.DataFrame(result, columns=columns)
+                        st.subheader("Query Results:")
+                        st.dataframe(df)
+                else:
+                    st.warning("No results found or an error occurred.")
+            else:
+                st.error("Failed to generate SQL query. Please try again.")
+        else:
+            st.warning("Please enter a question.")
+
+if __name__ == "__main__":
+    main()
