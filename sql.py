@@ -1,6 +1,7 @@
 import sqlite3
 import random
 from datetime import datetime, timedelta
+import os
 
 # Connect to SQLite
 connection = sqlite3.connect("comprehensive_student.db")
@@ -35,6 +36,11 @@ CREATE TABLE IF NOT EXISTS STUDENT (
 """)
 
 print("Table created successfully.")
+
+# Check if the table exists
+cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+tables = cursor.fetchall()
+print("Tables in the database:", tables)
 
 # Function to generate random dates
 def random_date(start, end):
@@ -111,3 +117,16 @@ connection.commit()
 connection.close()
 
 print("Comprehensive student database created successfully with 1000 records.")
+
+def read_sql_query(sql, db):
+    try:
+        conn = sqlite3.connect(db)
+        cur = conn.cursor()
+        cur.execute(sql)
+        rows = cur.fetchall()
+        return rows
+    except sqlite3.Error as e:
+        print(f"An error occurred while executing the SQL query: {str(e)}")  # Log the error
+        return None
+    finally:
+        conn.close()  # Ensure the connection is closed
